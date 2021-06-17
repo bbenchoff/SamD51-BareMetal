@@ -22,12 +22,18 @@ enum gpio_port { GPIO_PORTA, GPIO_PORTB, GPIO_PORTC, GPIO_PORTD, GPIO_PORTE };
 
 int main(void)
 {
+
+	char * buffer = "hello";
+	
 	initClocks();
 	initUSART();
 	initGPIO();
+	print_init();
 	
+	SERCOM0_write(buffer,5);
+
 	//should be able to print now
-	printf("this works");
+	printf("this works\n");
 	
     /* Replace with your application code */
     while (1) 
@@ -43,7 +49,6 @@ void initGPIO(void)
 	| PORT_WRCONFIG_WRPMUX
 	| PORT_WRCONFIG_PMUXEN
 	| PORT_WRCONFIG_WRPINCFG
-	| PORT_WRCONFIG_HWSEL
 	| ((1 << 9) & 0xffff);
 
 	// set UART TX output
@@ -52,7 +57,6 @@ void initGPIO(void)
 	| PORT_WRCONFIG_WRPMUX
 	| PORT_WRCONFIG_PMUXEN
 	| PORT_WRCONFIG_WRPINCFG
-	| PORT_WRCONFIG_HWSEL
 	| ((1 << 8) & 0xffff);
 
 }
@@ -127,56 +131,120 @@ int32_t SERCOM0_IsDataAvailable(void)
 
 void initClocks(void)
 {
+	/*-------CLOCK CONFIGURATION----------------------------------------------/
+	
+	GCLK0 source:	DPLL0	(120 MHz)
+	GCLK0 sink:		MCLK (CPU)
+	
+	GCLK2 source:	DFLL48M	(48 MHZ)
+	GCLK2 sink:		Peripheral core
+	
+	GCLK3 source:	XOSC32k	(32.768kHz)
+	GCLK3 sink:		Peripheral slow
+	
+	XOSC32k source:	Clock input on PA01 & PA02
+	XOSC32k sink:	DPLL0
+	XOSC32k sink:	GCLK3
+	
+	DPLL0 source:	XOSC32k (32.768kHz)
+	DPLL0 sink:		GCLK0 (120MHz)
+	
+	DFLL48M source:	GCLK3
+	DFLL48M sink:	GCLK2
+	
+	Steps to set up clocks in order:
+	
+	1) Setup XOSC32k
+	2) Setup GCLK3 for 32kHz
+	3) Setup DPLL0 for 120MHz
+	4) Setup GCLK0 for 120MHz
+	5) Setup DFLL48M for 48MHz
+	6) Setup GCLK2 for 48MHz
+	7) Setup Core and slow clocks for Peripherals
+	8) Setup MCLK, including CLK_CPU and CLK_APBx, CLK_AHBx.
+
+	*/
 	//Set wait states
-	NVMCTRL->CTRLA.bit.RWS = 5;
+	NVMCTRL->CTRLA.bit.RWS = 5;		//5ws for 120MHz
 	
 	//Gclk reset
 	GCLK->CTRLA.bit.SWRST;
-	
+
 	//OSCILLATOR CONTROL
-	//Setup XOSC
+	//STEP 1) Setup XOSC32K
 	OSC32KCTRL->XOSC32K.bit.CGM = 01;
 	OSC32KCTRL->XOSC32K.bit.XTALEN = 1;
 	OSC32KCTRL->XOSC32K.bit.EN32K = 1;
 	OSC32KCTRL->XOSC32K.bit.ONDEMAND = 0;
 	OSC32KCTRL->XOSC32K.bit.RUNSTDBY = 1;
-	OSC32KCTRL->XOSC32K.bit.STARTUP = 6;
-	OSC32KCTRL->XOSC32K.bit.ENABLE = 1;
-	
+	OSC32KCTRL->XOSC32K.bit.STARTUP = 0;
+	OSC32KCTRL->XOSC32K.bit.ENABLE = 1;	
 	OSC32KCTRL->CFDCTRL.bit.CFDPRESC = 0;
 	OSC32KCTRL->CFDCTRL.bit.SWBACK = 0;
 	OSC32KCTRL->CFDCTRL.bit.CFDEN = 0;
-	
 	OSC32KCTRL->EVCTRL.bit.CFDEO = 0;
+	OSC32KCTRL->RTCCTRL.bit.RTCSEL=OSC32KCTRL_RTCCTRL_RTCSEL_XOSC32K;
 	
 	// make sure osc32kcrtl is ready
 	while (!OSC32KCTRL->INTFLAG.bit.XOSC32KRDY)
 		;
+	
+	//GCLK3 Control
+	//Step 2) Setup GCLK3 for 32kHz
+	GCLK->GENCTRL[3].reg = 
+			GCLK_GENCTRL_GENEN
+		|	GCLK_GENCTRL_SRC_XOSC32K;
 		
-	//Enable DPLL
-	OSCCTRL->Dpll[0].DPLLCTRLA.bit.ENABLE = 0;
+	//DPLL0 SETUP
+	//Step 3) Setup DPLL0 for 120 MHz 
+	OSCCTRL->Dpll[0].DPLLCTRLA.bit.ENABLE = 1;
+	OSCCTRL->Dpll[0].DPLLCTRLA.bit.RUNSTDBY = 1;
+	OSCCTRL->Dpll[0].DPLLCTRLA.bit.ONDEMAND = 0;
 	while (OSCCTRL->Dpll[0].DPLLSYNCBUSY.bit.ENABLE)
 		;
 		
-	OSCCTRL->Dpll[0].DPLLRATIO.reg = (12<<16) + 0xe4d;  
-	while (OSCCTRL->Dpll[0].DPLLSYNCBUSY.bit.DPLLRATIO)
+	OSCCTRL->Dpll[0].DPLLRATIO.reg = (3<<16) + 0xe4d;
+	
+	
+	///IT LOCKS ON THIS LINE WHY WHAT THE FUCK
+	while (!OSCCTRL->Dpll[0].DPLLSTATUS.bit.LOCK)
 		;
+		
 	
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.DIV = 1;
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.DCOEN = 0;
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.LBYPASS = 1;
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.LTIME = 0;
-	OSCCTRL->Dpll[0].DPLLCTRLB.bit.REFCLK = 1;
+	OSCCTRL->Dpll[0].DPLLCTRLB.bit.REFCLK = 1;	//Sets input to XOSC32k
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.WUF = 1;	
 		
 	OSCCTRL->Dpll[0].DPLLCTRLA.bit.ONDEMAND = 0;
 	OSCCTRL->Dpll[0].DPLLCTRLA.bit.RUNSTDBY = 1;
 	OSCCTRL->Dpll[0].DPLLCTRLA.bit.ENABLE = 1;
-	
-	
+
 	//Per errata 2.13.1
 	while(!(OSCCTRL->Dpll[0].DPLLSTATUS.bit.CLKRDY == 1))
 		;
+		
+	//GCLK0 Control
+	//3) Setup DPLL0 for 120MHz
+	GCLK->GENCTRL[0].reg = 
+			GCLK_GENCTRL_GENEN
+		|	GCLK_GENCTRL_SRC_DPLL0;
+		
+		
+	//Setup DFLL48M
+	//5) Setup DFLL48M for 48MHz
+	OSCCTRL->DFLLCTRLA.bit.ENABLE = 1;
+	OSCCTRL->DFLLCTRLA.bit.ONDEMAND = 0;
+	OSCCTRL->DFLLCTRLA.bit.RUNSTDBY = 1;
+	
+	
+	//GCLK2 Control
+	//Setup GCLK2 for 48MHz
+	GCLK->GENCTRL[2].reg =
+			GCLK_GENCTRL_GENEN
+		|	GCLK_GENCTRL_SRC_DFLL;
 	
 	
 	GCLK->GENCTRL[0].reg = (0 << 16) | (0x21 << 8) | 7; // dpll0 = 7, enabled and standby = 0x21, divide by 1
@@ -186,5 +254,7 @@ void initClocks(void)
 	GCLK->GENCTRL[1].reg = (100 << 16) | (0x21 << 8) | 7; // dpll0 = 7, enabled and standby = 0x21, divide by 100
 	while (GCLK->SYNCBUSY.bit.GENCTRL1)
 		;
+		
+	MCLK->CPUDIV.reg = MCLK_CPUDIV_DIV_DIV1;
 	
 }
