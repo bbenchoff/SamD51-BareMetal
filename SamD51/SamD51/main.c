@@ -38,6 +38,7 @@ int main(void)
     /* Replace with your application code */
     while (1) 
     {
+		//printf("this works\n");
     }
 }
 
@@ -85,6 +86,10 @@ void initUSART(void)
 		
 	//set character size to 8
 	SERCOM0->USART.CTRLB.bit.CHSIZE = 0;
+	
+	//setup baud rate
+	SERCOM0->USART.BAUD.reg = CONF_SERCOM_0_USART_BAUD_RATE_REGISTER_VAL;
+	
 		
 	//enable transmitter and receiver
 	SERCOM0->USART.CTRLB.reg = 
@@ -92,15 +97,14 @@ void initUSART(void)
 		|	SERCOM_USART_CTRLB_RXEN;
 	while(SERCOM0->USART.SYNCBUSY.bit.CTRLB);
 	
-	//setup baud rate
-	//SERCOM0->USART.BAUD.reg = CONF_SERCOM_0_USART_BAUD_RATE_REGISTER_VAL;
-	SERCOM0->USART.BAUD.reg = 65536;
+
 	
 	//enable USART
 	SERCOM0->USART.CTRLA.reg |= SERCOM_USART_CTRLA_ENABLE;
 	while(SERCOM0->USART.SYNCBUSY.bit.ENABLE);
 
 }
+
 
 int32_t SERCOM0_write(const char *const buf, const uint32_t length) {
 	uint32_t offset = 0;
@@ -179,7 +183,7 @@ void initClocks(void)
 	OSC32KCTRL->XOSC32K.bit.CGM = 01;
 	OSC32KCTRL->XOSC32K.bit.XTALEN = 1;
 	OSC32KCTRL->XOSC32K.bit.EN32K = 1;
-	OSC32KCTRL->XOSC32K.bit.ONDEMAND = 0;
+	OSC32KCTRL->XOSC32K.bit.ONDEMAND = 1;
 	OSC32KCTRL->XOSC32K.bit.RUNSTDBY = 1;
 	OSC32KCTRL->XOSC32K.bit.STARTUP = 0;
 	OSC32KCTRL->XOSC32K.bit.ENABLE = 1;	
@@ -187,11 +191,9 @@ void initClocks(void)
 	OSC32KCTRL->CFDCTRL.bit.SWBACK = 0;
 	OSC32KCTRL->CFDCTRL.bit.CFDEN = 0;
 	OSC32KCTRL->EVCTRL.bit.CFDEO = 0;
-	OSC32KCTRL->RTCCTRL.bit.RTCSEL=OSC32KCTRL_RTCCTRL_RTCSEL_XOSC32K;
 	
 	// make sure osc32kcrtl is ready
-	while (!OSC32KCTRL->INTFLAG.bit.XOSC32KRDY)
-		;
+	while (!OSC32KCTRL->INTFLAG.bit.XOSC32KRDY);
 	
 	//GCLK3 Control
 	//Step 2) Setup GCLK3 for 32kHz
@@ -201,9 +203,6 @@ void initClocks(void)
 		
 	//DPLL0 SETUP
 	//Step 3) Setup DPLL0 for 120 MHz 
-	
-	
-		
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.DIV = 1;
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.DCOEN = 0;
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.LBYPASS = 1;
@@ -229,6 +228,8 @@ void initClocks(void)
 		
 	//Setup DFLL48M
 	//5) Setup DFLL48M for 48MHz
+	OSCCTRL->DFLLCTRLB.bit.MODE = 1;
+	OSCCTRL->DFLLCTRLB.bit.WAITLOCK = 1;
 	OSCCTRL->DFLLCTRLA.bit.ENABLE = 1;
 	OSCCTRL->DFLLCTRLA.bit.ONDEMAND = 0;
 	OSCCTRL->DFLLCTRLA.bit.RUNSTDBY = 1;
