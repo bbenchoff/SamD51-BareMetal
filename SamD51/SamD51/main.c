@@ -7,7 +7,7 @@
 #define CONF_SERCOM_2_USART_BAUD_RATE 9600
 
 #define CONF_SERCOM_0_USART_BAUD_RATE_REGISTER_VAL \
-(65536 - ((65536 * 16.0f * (CONF_SERCOM_2_USART_BAUD_RATE)) / 12000000))	
+(65536 - ((65536 * 16.0f * (CONF_SERCOM_2_USART_BAUD_RATE)) / 120000000))	
 
 
 void initClocks(void);
@@ -83,6 +83,9 @@ void initUSART(void)
 		|	SERCOM_USART_CTRLA_TXPO(0)
 		|	SERCOM_USART_CTRLA_DORD;
 		
+	//set character size to 8
+	SERCOM0->USART.CTRLB.bit.CHSIZE = 0;
+		
 	//enable transmitter and receiver
 	SERCOM0->USART.CTRLB.reg = 
 			SERCOM_USART_CTRLB_TXEN
@@ -90,7 +93,8 @@ void initUSART(void)
 	while(SERCOM0->USART.SYNCBUSY.bit.CTRLB);
 	
 	//setup baud rate
-	SERCOM0->USART.BAUD.reg = CONF_SERCOM_0_USART_BAUD_RATE_REGISTER_VAL;
+	//SERCOM0->USART.BAUD.reg = CONF_SERCOM_0_USART_BAUD_RATE_REGISTER_VAL;
+	SERCOM0->USART.BAUD.reg = 65536;
 	
 	//enable USART
 	SERCOM0->USART.CTRLA.reg |= SERCOM_USART_CTRLA_ENABLE;
@@ -197,26 +201,16 @@ void initClocks(void)
 		
 	//DPLL0 SETUP
 	//Step 3) Setup DPLL0 for 120 MHz 
-	OSCCTRL->Dpll[0].DPLLCTRLA.bit.ENABLE = 1;
-	OSCCTRL->Dpll[0].DPLLCTRLA.bit.RUNSTDBY = 1;
-	OSCCTRL->Dpll[0].DPLLCTRLA.bit.ONDEMAND = 0;
-	while (OSCCTRL->Dpll[0].DPLLSYNCBUSY.bit.ENABLE)
-		;
+	
+	
 		
-	OSCCTRL->Dpll[0].DPLLRATIO.reg = (3<<16) + 0xe4d;
-	
-	
-	///IT LOCKS ON THIS LINE WHY WHAT THE FUCK
-	while (!OSCCTRL->Dpll[0].DPLLSTATUS.bit.LOCK)
-		;
-		
-	
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.DIV = 1;
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.DCOEN = 0;
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.LBYPASS = 1;
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.LTIME = 0;
 	OSCCTRL->Dpll[0].DPLLCTRLB.bit.REFCLK = 1;	//Sets input to XOSC32k
-	OSCCTRL->Dpll[0].DPLLCTRLB.bit.WUF = 1;	
+	OSCCTRL->Dpll[0].DPLLCTRLB.bit.WUF = 1;
+	OSCCTRL->Dpll[0].DPLLRATIO.reg = (3<<16) + 0xe4d;
 		
 	OSCCTRL->Dpll[0].DPLLCTRLA.bit.ONDEMAND = 0;
 	OSCCTRL->Dpll[0].DPLLCTRLA.bit.RUNSTDBY = 1;
@@ -256,5 +250,6 @@ void initClocks(void)
 		;
 		
 	MCLK->CPUDIV.reg = MCLK_CPUDIV_DIV_DIV1;
+	
 	
 }
